@@ -42,3 +42,23 @@ bin/
 # Visual Studio Code
 .vscode/
 
+#python
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+
+# Data
+*.csv
+
+# Logs
+*.log
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Images
+*.png
+*.jpg
+*.jpeg
+*.gif
