@@ -1,5 +1,5 @@
 #include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/compressed_image.hpp>
+#include "static_image_msgs/msg/image4k.hpp"
 #include <vector>
 #include <numeric>
 #include <cmath>
@@ -12,16 +12,16 @@ public:
     : Node("camera_subscriber"), frame_count_(0)
     {
         auto qos = rclcpp::QoS(0).best_effort();
-        subscription_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(
+        subscription_ = this->create_subscription<static_image_msgs::msg::Image4k>(
             "camera/image_raw/compressed", qos,
             std::bind(&CameraSubscriber::topic_callback, this, std::placeholders::_1));
     }
 
 private:
-    void topic_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg)
+    void topic_callback(const static_image_msgs::msg::Image4k::SharedPtr msg)
     {
         auto now = std::chrono::steady_clock::now();
-        auto msg_time = rclcpp::Time(msg->header.stamp);
+        auto msg_time = rclcpp::Time(msg->timestamp);
 
         if (previous_steady_time_ != std::chrono::steady_clock::time_point())
         {
@@ -65,7 +65,7 @@ private:
         }
     }
 
-    rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr subscription_;
+    rclcpp::Subscription<static_image_msgs::msg::Image4k>::SharedPtr subscription_;
     std::chrono::steady_clock::time_point previous_steady_time_;
     size_t frame_count_;
     std::vector<double> latencies_;
