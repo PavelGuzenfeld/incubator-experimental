@@ -45,20 +45,18 @@ project(sync-utc-px4)
 
   # find dependencies
   find_package(MAVSDK REQUIRED)
-  
-#   add_executable(${PROJECT_NAME} src/sync-utc-px4.cpp src/mavsdk_connector.cpp)
-#   include_directories(/usr/include/mavsdk/ include)
-  # target_include_directories(${project} INTERFACE /usr/include/mavsdk/ include)
+  include_directories(/usr/include/mavsdk/ include)
+  add_executable(mavsdk-timesync src/mavsdk-timesync.cpp src/mavsdk_connector.cpp)
+  target_link_libraries(mavsdk-timesync MAVSDK::mavsdk -lrt -lpthread)
  
   # target_link_libraries(mission_control MAVSDK::mavsdk -fsanitize=address)
 #   target_link_libraries(${PROJECT_NAME} MAVSDK::mavsdk -lrt -lpthread)
 
   add_executable(${PROJECT_NAME}-timesync src/sync-utc-px4-timesync.cpp src/mavsdk_connector.cpp)
-  include_directories(/usr/include/mavsdk/ include)
   target_link_libraries(${PROJECT_NAME}-timesync MAVSDK::mavsdk -lrt -lpthread)
 
   install(TARGETS
-#   ${PROJECT_NAME}
+  mavsdk-timesync
   ${PROJECT_NAME}-timesync
   DESTINATION lib/${PROJECT_NAME}
   )
