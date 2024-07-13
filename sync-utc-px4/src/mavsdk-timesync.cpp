@@ -6,89 +6,7 @@
 #include <memory>
 #include <thread>
 #include <functional>
-
-class Timesync {
-public:
-    Timesync(std::shared_ptr<mavsdk::MavlinkPassthrough> mavlink_passthrough);
-
-    void send_timesync_request(uint8_t target_system, uint8_t target_component);
-    [[nodiscard]] int64_t calculate_offset() const;
-
-private:
-    int64_t local_time_ns() const;
-    void on_timesync_message(const mavlink_message_t& message);
-
-    std::shared_ptr<mavsdk::MavlinkPassthrough> mavlink_passthrough_;
-    int64_t send_timestamp_;
-    int64_t receive_timestamp_;
-    int64_t offset_;
-};
-
-Timesync::Timesync(std::shared_ptr<mavsdk::MavlinkPassthrough> mavlink_passthrough)
-    : mavlink_passthrough_(std::move(mavlink_passthrough)), send_timestamp_(0), receive_timestamp_(0), offset_(0) {
-    mavlink_passthrough_->subscribe_message(
-        MAVLINK_MSG_ID_TIMESYNC, [this](const mavlink_message_t& message) {
-            on_timesync_message(message);
-        });
-}
-
-void Timesync::send_timesync_request(uint8_t target_system, uint8_t target_component) {
-    send_timestamp_ = local_time_ns();
-    mavlink_message_t message;
-    mavlink_timesync_t timesync = {};
-    timesync.tc1 = 0;  // This is a request, so tc1 is set to 0
-    timesync.ts1 = send_timestamp_;
-
-    mavlink_msg_timesync_pack(
-        mavlink_passthrough_->get_our_sysid(),
-        mavlink_passthrough_->get_our_compid(),
-        &message,
-        timesync.tc1,
-        timesync.ts1,
-        target_system,
-        target_component);
-
-    auto result = mavlink_passthrough_->send_message(message);
-    if (result != mavsdk::MavlinkPassthrough::Result::Success) {
-        std::cerr << "Failed to send timesync request\n";
-    }
-}
-
-void Timesync::on_timesync_message(const mavlink_message_t& message) {
-    mavlink_timesync_t timesync;
-    mavlink_msg_timesync_decode(&message, &timesync);
-
-    if (timesync.tc1 == 0) {
-        // This is a request, respond back
-        mavlink_message_t response;
-        mavlink_msg_timesync_pack(
-            mavlink_passthrough_->get_our_sysid(),
-            mavlink_passthrough_->get_our_compid(),
-            &response,
-            local_time_ns(),
-            timesync.ts1,
-            message.sysid,
-            message.compid);
-
-        auto result = mavlink_passthrough_->send_message(response);
-        if (result != mavsdk::MavlinkPassthrough::Result::Success) {
-            std::cerr << "Failed to send timesync response\n";
-        }
-    } else {
-        // This is a response
-        receive_timestamp_ = local_time_ns();
-        offset_ = ((timesync.tc1 - timesync.ts1) + (timesync.ts1 - send_timestamp_)) / 2;
-    }
-}
-
-[[nodiscard]] int64_t Timesync::calculate_offset() const {
-    return offset_;
-}
-
-int64_t Timesync::local_time_ns() const {
-    return std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::high_resolution_clock::now().time_since_epoch()).count();
-}
+#include "mavsdk_connector.hpp"
 
 int main(int argc, char** argv) {
     if (argc != 2) {
@@ -97,25 +15,82 @@ int main(int argc, char** argv) {
     }
 
     std::string connection_url = argv[1];
-    mavsdk::Mavsdk mavsdk;
-    auto system = connect_to_mavsdk(mavsdk, connection_url);
+    mavsdk::Mavsdk mavsdk{mavsdk::Mavsdk::Configuration(mavsdk::Mavsdk::ComponentType::CompanionComputer)};
+    auto system = connect_to_mavsdk(mavsdk,connection_url);
     if (!system) {
         return 1;
     }
 
+    system->enable_timesync();
+
     auto mavlink_passthrough = std::make_shared<mavsdk::MavlinkPassthrough>(system);
 
-    Timesync timesync{mavlink_passthrough};
+    mavlink_passthrough->subscribe_message(
+        MAVLINK_MSG_ID_SYSTEM_TIME, [](const mavlink_message_t& message) {
+            mavlink_system_time_t controller_time;
+            mavlink_msg_system_time_decode(&message, &controller_time);
+            //Get current utc time in nanoseconds
+            auto current_time = std::chrono::system_clock::now();
+            auto offset = controller_time.time_unix_usec - std::chrono::duration_cast<std::chrono::microseconds>(current_time.time_since_epoch()).count();
+            std::cout << "Mavlink time utc: " << controller_time.time_unix_usec<< std::endl;
+            std::cout << "Mavlink time since boot: " << controller_time.time_boot_ms << std::endl;
+            std::cout << "Current time: " << std::chrono::duration_cast<std::chrono::microseconds>(current_time.time_since_epoch()).count() << std::endl;
+            std::cout << "Difference: " << offset << std::endl;
 
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+        });
 
-    // Send a timesync request to a specific target system and component
-    timesync.send_timesync_request(1, 1); // Example target_system and target_component IDs
+    // mavlink_passthrough->subscribe_message(
+    //     MAVLINK_MSG_ID_ATTITUDE_QUATERNION,
+    //     [](const mavlink_message_t& message) {
+    //         mavlink_attitude_quaternion_t attitude_quaternion;
+    //         // time_boot_ms	uint32_t	[ms]	Timestamp (time since system boot).
+    //         // q1	float	[rad]	Quaternion component 1, w (1 in null-rotation)
+    //         // q2	float	[rad]	Quaternion component 2, x (0 in null-rotation)
+    //         // q3	float	[rad]	Quaternion component 3, y (0 in null-rotation)
+    //         // q4	float	[rad]	Quaternion component 4, z (0 in null-rotation)
+    //         // rollspeed	float	[rad/s]	Body frame roll / phi angular speed
+    //         // pitchspeed	float	[rad/s]	Body frame pitch / theta angular speed
+    //         // yawspeed	float	[rad/s]	Body frame yaw / psi angular speed
+    //         mavlink_msg_attitude_quaternion_decode(&message, &attitude_quaternion);
+    //         std::cout << "time_boot_ms: " << attitude_quaternion.time_boot_ms << " ms\n"
+    //                                     << "q1: " << attitude_quaternion.q1 << '\n' 
+    //                                     << "q2: " << attitude_quaternion.q2 << '\n'
+    //                                     << "q3: " << attitude_quaternion.q3 << '\n'
+    //                                     << "q4: " << attitude_quaternion.q4 << '\n'
+    //                                     << "rollspeed: " << attitude_quaternion.rollspeed << " rad/s\n"
+    //                                     << "pitchspeed: " << attitude_quaternion.pitchspeed << " rad/s\n"
+    //                                     << "yawspeed: " << attitude_quaternion.yawspeed << " rad/s\n";
+    //     }
+    // );
 
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+    mavlink_passthrough->subscribe_message(
+        MAVLINK_MSG_ID_SYSTEM_TIME,
+        [](const mavlink_message_t& message) {
+            mavlink_system_time_t system_time;
+            mavlink_msg_system_time_decode(&message, &system_time);
+            //time_unix_usec	uint64_t	[us]	Time since system start
+            //time_boot_ms	uint32_t	[ms]	Time since system boot
+            
 
-    int64_t offset = timesync.calculate_offset();
-    std::cout << "Estimated offset: " << offset << " nanoseconds\n";
+            auto px4_time_us = system_time.time_unix_usec;
+            auto px4_time = std::chrono::high_resolution_clock::time_point(std::chrono::microseconds(px4_time_us));
+            auto local_time = std::chrono::high_resolution_clock::now();
+
+            auto time_diff_us = std::chrono::duration_cast<std::chrono::microseconds>(local_time - px4_time).count();
+            std::cout << "Time difference: " << time_diff_us << " µs\n";
+
+            const int64_t desired_precision_us = 1000; // 1 millisecond in microseconds
+            if (std::abs(time_diff_us) > desired_precision_us) {
+                std::cerr << "Warning: Time difference is greater than 1 millisecond (" << desired_precision_us << " µs)!\n";
+            } else {
+                std::cout << "Times are synchronized within 1 millisecond (" << desired_precision_us << " µs).\n";
+            }
+        });
+
+    //sleep for 20 sec
+    std::cout << "Sleeping for 20 seconds" << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(20));
+
 
     return 0;
 }
