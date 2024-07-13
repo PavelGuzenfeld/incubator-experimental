@@ -8,6 +8,7 @@
 #include <functional>
 #include "mavsdk_connector.hpp"
 
+
 int main(int argc, char** argv) {
     if (argc != 2) {
         std::cerr << "Usage: " << argv[0] << " <connection_url>\n";
@@ -29,14 +30,16 @@ int main(int argc, char** argv) {
         MAVLINK_MSG_ID_SYSTEM_TIME, [](const mavlink_message_t& message) {
             mavlink_system_time_t controller_time;
             mavlink_msg_system_time_decode(&message, &controller_time);
-            //Get current utc time in nanoseconds
-            auto current_time = std::chrono::system_clock::now();
-            auto offset = controller_time.time_unix_usec - std::chrono::duration_cast<std::chrono::microseconds>(current_time.time_since_epoch()).count();
-            std::cout << "Mavlink time utc: " << controller_time.time_unix_usec<< std::endl;
-            std::cout << "Mavlink time since boot: " << controller_time.time_boot_ms << std::endl;
-            std::cout << "Current time: " << std::chrono::duration_cast<std::chrono::microseconds>(current_time.time_since_epoch()).count() << std::endl;
-            std::cout << "Difference: " << offset << std::endl;
-
+            auto system_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+            auto steady_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+            auto mavlink_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::microseconds(controller_time.time_unix_usec)).count();
+            auto mavlink_boot_time_ms =  std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::microseconds(controller_time.time_boot_ms)).count();
+            auto diff = system_time_ms - mavlink_time_ms;
+            std::cout << "Mavlink time ms: " << mavlink_time_ms << std::endl;
+            std::cout << "Current system time ms: " << system_time_ms << std::endl;
+            std::cout << "Current steady time ms" << steady_time_ms << "\n";
+            std::cout << "Difference: " << diff << std::endl;
+            std::cout << "Mavlink time since boot: " << mavlink_boot_time_ms << std::endl;
         });
 
     // mavlink_passthrough->subscribe_message(
@@ -63,29 +66,29 @@ int main(int argc, char** argv) {
     //     }
     // );
 
-    mavlink_passthrough->subscribe_message(
-        MAVLINK_MSG_ID_SYSTEM_TIME,
-        [](const mavlink_message_t& message) {
-            mavlink_system_time_t system_time;
-            mavlink_msg_system_time_decode(&message, &system_time);
-            //time_unix_usec	uint64_t	[us]	Time since system start
-            //time_boot_ms	uint32_t	[ms]	Time since system boot
+    // mavlink_passthrough->subscribe_message(
+    //     MAVLINK_MSG_ID_SYSTEM_TIME,
+    //     [](const mavlink_message_t& message) {
+    //         mavlink_system_time_t system_time;
+    //         mavlink_msg_system_time_decode(&message, &system_time);
+    //         //time_unix_usec	uint64_t	[us]	Time since system start
+    //         //time_boot_ms	uint32_t	[ms]	Time since system boot
             
 
-            auto px4_time_us = system_time.time_unix_usec;
-            auto px4_time = std::chrono::high_resolution_clock::time_point(std::chrono::microseconds(px4_time_us));
-            auto local_time = std::chrono::high_resolution_clock::now();
+    //         auto px4_time_us = system_time.time_unix_usec;
+    //         auto px4_time = std::chrono::high_resolution_clock::time_point(std::chrono::microseconds(px4_time_us));
+    //         auto local_time = std::chrono::high_resolution_clock::now();
 
-            auto time_diff_us = std::chrono::duration_cast<std::chrono::microseconds>(local_time - px4_time).count();
-            std::cout << "Time difference: " << time_diff_us << " µs\n";
+    //         auto time_diff_us = std::chrono::duration_cast<std::chrono::microseconds>(local_time - px4_time).count();
+    //         std::cout << "Time difference: " << time_diff_us << " µs\n";
 
-            const int64_t desired_precision_us = 1000; // 1 millisecond in microseconds
-            if (std::abs(time_diff_us) > desired_precision_us) {
-                std::cerr << "Warning: Time difference is greater than 1 millisecond (" << desired_precision_us << " µs)!\n";
-            } else {
-                std::cout << "Times are synchronized within 1 millisecond (" << desired_precision_us << " µs).\n";
-            }
-        });
+    //         const int64_t desired_precision_us = 1000; // 1 millisecond in microseconds
+    //         if (std::abs(time_diff_us) > desired_precision_us) {
+    //             std::cerr << "Warning: Time difference is greater than 1 millisecond (" << desired_precision_us << " µs)!\n";
+    //         } else {
+    //             std::cout << "Times are synchronized within 1 millisecond (" << desired_precision_us << " µs).\n";
+    //         }
+    //     });
 
     //sleep for 20 sec
     std::cout << "Sleeping for 20 seconds" << std::endl;
