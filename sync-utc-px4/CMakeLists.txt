@@ -45,9 +45,7 @@ endif()
 
 # find dependencies
 find_package(MAVSDK REQUIRED)
-find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-
-include_directories(/usr/include/mavsdk/ include ${EIGEN3_INCLUDE_DIR})
+include_directories(/usr/include/mavsdk/ include)
 
 add_executable(mavsdk-timesync src/mavsdk-timesync.cpp src/mavsdk_connector.cpp)
 target_link_libraries(mavsdk-timesync MAVSDK::mavsdk -lrt -lpthread)
