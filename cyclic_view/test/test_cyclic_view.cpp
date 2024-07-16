@@ -82,5 +82,5 @@ TEST_CASE("Pushing data into CyclicView") {
     for (const auto& elem : push_view) {
         result.push_back(elem);
     }
-    REQUIRE(result == std::vector<int>{4, 2, 3});
+    REQUIRE(result == std::vector<int>{2, 3, 4});
 }

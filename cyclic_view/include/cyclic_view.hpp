@@ -65,7 +65,7 @@ public:
     using iterator = CyclicIterator<ContainerType>;
 
     constexpr CyclicView(ContainerType& container, size_type start, size_type size)
-        : container_(container), start_(start), size_(size), push_index_(0) {
+        : container_(container), start_(start), size_(size), push_index_(start) {
         if (start_ >= container_.size() || size_ > container_.size()) {
             throw std::out_of_range("Invalid start or size for CyclicView");
         }
@@ -88,10 +88,12 @@ public:
     }
 
     void push(const typename ContainerType::value_type& value) {
-        container_[(start_ + push_index_) % container_.size()] = value;
+        container_[push_index_] = value;
         push_index_ = (push_index_ + 1) % container_.size();
         if (size_ < container_.size()) {
             ++size_;
+        } else {
+            start_ = (start_ + 1) % container_.size();
         }
     }
 
