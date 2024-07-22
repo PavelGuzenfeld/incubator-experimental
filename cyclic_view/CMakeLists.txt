@@ -26,11 +26,14 @@ add_compile_options(-Wformat -Wall -Wextra -pedantic -Werror -Wconversion -Wshad
 # Add the test
 add_executable(cyclic_viewTest test/test_cyclic_view.cpp)
 target_include_directories(cyclic_viewTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(cyclic_viewTest Catch2::Catch2)
+target_link_libraries(cyclic_viewTest PRIVATE Catch2::Catch2)
 
 # Add sanitizer options for testing
-target_compile_options(cyclic_viewTest PRIVATE -fsanitize=address -fsanitize=undefined)
+target_compile_options(cyclic_viewTest PRIVATE -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer)
 target_link_options(cyclic_viewTest PRIVATE -fsanitize=address -fsanitize=undefined)
+
+# Ensure ASan runtime is linked
+target_link_libraries(cyclic_viewTest PRIVATE -static-libasan)
 
 # Enable testing
 enable_testing()
