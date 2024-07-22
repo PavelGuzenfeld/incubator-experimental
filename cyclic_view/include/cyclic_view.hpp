@@ -1,16 +1,13 @@
 #pragma once
 
-#include <vector>
-#include <array>
-#include <iostream>
-#include <stdexcept>
 #include <iterator>
 #include <type_traits>
+#include <cassert>
 
 namespace cyclic {
 
 // Iterator boilerplate using std::iterator
-template<typename ContainerType>
+template <typename ContainerType>
 class CyclicIterator {
 public:
     using iterator_category = std::forward_iterator_tag;
@@ -57,7 +54,7 @@ private:
     typename ContainerType::size_type index_;
 };
 
-// Template class definition
+// Template class definition for standard containers
 template <typename ContainerType>
 class CyclicView {
 public:
@@ -66,9 +63,8 @@ public:
 
     constexpr CyclicView(ContainerType& container, size_type start, size_type size)
         : container_(container), start_(start), size_(size), push_index_(start) {
-        if (start_ >= container_.size() || size_ > container_.size()) {
-            throw std::out_of_range("Invalid start or size for CyclicView");
-        }
+        assert(start < container.size() && "Invalid start index for CyclicView");
+        assert(size <= container.size() && "Invalid size for CyclicView");
     }
 
     [[nodiscard]] constexpr const auto& operator[](size_type index) const {
@@ -104,12 +100,57 @@ private:
     size_type push_index_;
 };
 
-// Helper function to create CyclicView from a C-style array
-template <typename T, size_t N>
-[[nodiscard]] constexpr auto make_cyclic_view(T (&array)[N]) {
-    // Here we use a static vector to ensure its lifetime extends beyond the function scope
-    static std::vector<T> container(array, array + N);
-    return CyclicView<std::vector<T>>(container, 0, N);
-}
+// Specialization for C-style pointers
+template <typename T>
+class CyclicView<T*> {
+public:
+    using size_type = size_t;
+    using value_type = T;
+    using iterator = CyclicIterator<std::span<T>>;
+
+    constexpr CyclicView(T* array, size_type size)
+        : container_(array, size), start_(0), size_(size), push_index_(0) {
+        assert(array != nullptr && "Invalid array pointer for CyclicView");
+    }
+
+    [[nodiscard]] constexpr const auto& operator[](size_type index) const {
+        return container_[(start_ + index) % size_];
+    }
+
+    [[nodiscard]] constexpr size_type size() const noexcept {
+        return size_;
+    }
+
+    iterator begin() {
+        return iterator(container_, start_, 0);
+    }
+
+    iterator end() {
+        return iterator(container_, start_, size_);
+    }
+
+    void push(const value_type& value) {
+        container_[push_index_] = value;
+        push_index_ = (push_index_ + 1) % size_;
+        if (size_ < size_) {
+            ++size_;
+        } else {
+            start_ = (start_ + 1) % size_;
+        }
+    }
+
+private:
+    std::span<T> container_;
+    size_type start_;
+    size_type size_;
+    size_type push_index_;
+};
+
+// Deduction guide
+template <typename ContainerType>
+CyclicView(ContainerType&, typename ContainerType::size_type, typename ContainerType::size_type) -> CyclicView<ContainerType>;
+
+template <typename T>
+CyclicView(T*, size_t) -> CyclicView<T*>;
 
 } // namespace cyclic
