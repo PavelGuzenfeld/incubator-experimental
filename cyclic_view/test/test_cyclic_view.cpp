@@ -8,10 +8,7 @@ TEST_CASE("CyclicView with std::array") {
     std::array<int, 5> arr = {1, 2, 3, 4, 5};
     CyclicView view(arr, 0, arr.size());
 
-    std::vector<int> result;
-    for (const auto& elem : view) {
-        result.push_back(elem);
-    }
+    std::vector<int> result(view.begin(), view.end());
     REQUIRE(result == std::vector<int>{1, 2, 3, 4, 5});
 
     // Test indexing
@@ -43,17 +40,13 @@ TEST_CASE("CyclicView with std::array") {
     auto result_push_8 = {4, 5, 6, 7, 8};
     REQUIRE(view.size() == 5);
     REQUIRE(std::equal(result_push_8.begin(), result_push_8.end(), view.begin()));
-
 }
 
 TEST_CASE("CyclicView with C-style array") {
     int c_arr[] = {6, 7, 8, 9, 10};
-    auto c_view = make_cyclic_view(c_arr);
+    CyclicView view(c_arr, sizeof(c_arr) / sizeof(c_arr[0]));
 
-    std::vector<int> result;
-    for (const auto& elem : c_view) {
-        result.push_back(elem);
-    }
+    std::vector<int> result(view.begin(), view.end());
     REQUIRE(result == std::vector<int>{6, 7, 8, 9, 10});
 }
 
@@ -61,10 +54,7 @@ TEST_CASE("CyclicView with std::vector") {
     std::vector<int> vec = {11, 12, 13, 14, 15};
     CyclicView view_vec(vec, 0, vec.size());
 
-    std::vector<int> result;
-    for (const auto& elem : view_vec) {
-        result.push_back(elem);
-    }
+    std::vector<int> result(view_vec.begin(), view_vec.end());
     REQUIRE(result == std::vector<int>{11, 12, 13, 14, 15});
 }
 
@@ -78,9 +68,6 @@ TEST_CASE("Pushing data into CyclicView") {
     push_view.push(3);
     push_view.push(4); // This should overwrite the first element
 
-    std::vector<int> result;
-    for (const auto& elem : push_view) {
-        result.push_back(elem);
-    }
-    REQUIRE(result == std::vector<int>{2, 3, 4});
+    std::vector<int> result(push_view.begin(), push_view.end());
+    REQUIRE(result == std::vector<int>{ 2, 3,4});
 }
