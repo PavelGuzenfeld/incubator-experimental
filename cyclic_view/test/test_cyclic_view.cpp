@@ -44,7 +44,8 @@ TEST_CASE("CyclicView with std::array") {
 
 TEST_CASE("CyclicView with C-style array") {
     int c_arr[] = {6, 7, 8, 9, 10};
-    CyclicView view(c_arr, sizeof(c_arr) / sizeof(c_arr[0]));
+    std::size_t size = sizeof(c_arr) / sizeof(c_arr[0]);
+    CyclicView view(c_arr, size);
 
     std::vector<int> result(view.begin(), view.end());
     REQUIRE(result == std::vector<int>{6, 7, 8, 9, 10});
