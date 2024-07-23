@@ -60,6 +60,7 @@ install(TARGETS cyclic_viewTest
 
 # Create and install the package configuration file
 include(CMakePackageConfigHelpers)
+set(cyclic_view_INCLUDE_DIRS "${CMAKE_INSTALL_PREFIX}/include")
 write_basic_package_version_file(
   "${CMAKE_CURRENT_BINARY_DIR}/cyclic_viewConfigVersion.cmake"
   VERSION "${PROJECT_VERSION}"
