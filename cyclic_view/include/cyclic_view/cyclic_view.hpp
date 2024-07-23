@@ -62,7 +62,7 @@ public:
     using size_type = typename ContainerType::size_type;
     using iterator = CyclicIterator<ContainerType>;
 
-    constexpr CyclicView(ContainerType& container, size_type start, size_type size)
+    constexpr CyclicView(ContainerType& container, size_type size, size_type start = 0)
         : container_(container), start_(start), size_(size), push_index_(start) {
         assert(start < container.size() && "Invalid start index for CyclicView");
         assert(size <= container.size() && "Invalid size for CyclicView");

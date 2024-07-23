@@ -6,7 +6,7 @@ using namespace cyclic;
 
 TEST_CASE("CyclicView with std::array") {
     std::array<int, 5> arr = {1, 2, 3, 4, 5};
-    CyclicView view(arr, 0, arr.size());
+    CyclicView view(arr, arr.size(), 0);
 
     std::vector<int> result(view.begin(), view.end());
     REQUIRE(result == std::vector<int>{1, 2, 3, 4, 5});
@@ -52,7 +52,7 @@ TEST_CASE("CyclicView with C-style array") {
 
 TEST_CASE("CyclicView with std::vector") {
     std::vector<int> vec = {11, 12, 13, 14, 15};
-    CyclicView view_vec(vec, 0, vec.size());
+    CyclicView view_vec(vec, vec.size(), 0);
 
     std::vector<int> result(view_vec.begin(), view_vec.end());
     REQUIRE(result == std::vector<int>{11, 12, 13, 14, 15});
@@ -69,5 +69,5 @@ TEST_CASE("Pushing data into CyclicView") {
     push_view.push(4); // This should overwrite the first element
 
     std::vector<int> result(push_view.begin(), push_view.end());
-    REQUIRE(result == std::vector<int>{ 2, 3,4});
+    REQUIRE(result == std::vector<int>{ 2, 3, 4});
 }
