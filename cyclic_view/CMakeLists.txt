@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(cyclic_view)
+project(cyclic_view VERSION 0.1.0)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -44,14 +44,31 @@ install(TARGETS cyclic_view
         EXPORT cyclic_viewTargets
         INCLUDES DESTINATION include)
 
+# Export the targets to a file
 install(EXPORT cyclic_viewTargets
         FILE cyclic_viewTargets.cmake
-        NAMESPACE Cyclic::
+        NAMESPACE cyclic_view::
         DESTINATION lib/cmake/cyclic_view)
 
-install(FILES include/cyclic_view.hpp
+# Install the header file
+install(FILES include/cyclic_view/cyclic_view.hpp
         DESTINATION include/cyclic_view)
 
 # Ensure test files are installed
 install(TARGETS cyclic_viewTest
         DESTINATION bin)
+
+# Create and install the package configuration file
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/cyclic_viewConfigVersion.cmake"
+  VERSION "${PROJECT_VERSION}"
+  COMPATIBILITY AnyNewerVersion
+)
+
+configure_file(cyclic_viewConfig.cmake.in "${CMAKE_CURRENT_BINARY_DIR}/cyclic_viewConfig.cmake" @ONLY)
+install(FILES
+  "${CMAKE_CURRENT_BINARY_DIR}/cyclic_viewConfig.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/cyclic_viewConfigVersion.cmake"
+  DESTINATION lib/cmake/cyclic_view
+)
