@@ -1,18 +1,18 @@
+#include "cyclic_view/cyclic_view.hpp"
+#include "mavsdk_connector.hpp"
+#include <chrono>
+#include <concepts>
 #include <cstdint>
+#include <functional>
 #include <iostream>
 #include <mavsdk/mavsdk.h>
 #include <mavsdk/plugins/mavlink_passthrough/mavlink_passthrough.h>
-#include <chrono>
 #include <memory>
-#include <thread>
-#include <functional>
-#include "mavsdk_connector.hpp"
 #include <numeric>
-#include <vector>
-#include <utility>
 #include <ranges>
+#include <thread>
 #include <type_traits>
-#include <concepts>
+#include <utility>
 
 template<typename T>
 concept Arithmetic = std::is_arithmetic_v<T>;
@@ -37,17 +37,9 @@ constexpr auto calculate_average_difference(const ArithmeticPairCollection auto&
     }) / static_cast<double>(collection.size());
 }
 
-template<ArithmeticPairCollection T>
-constexpr void insert_and_limit(T& collection, const ArithmeticPair auto& pair, size_t max_size) {
-    if (collection.size() < max_size) {
-        collection.push_back(pair);
-    } else {
-        std::rotate(collection.begin(), collection.begin() + 1, collection.end());
-        collection.back() = pair;
-    }
-}
 
-std::vector<std::tuple<uint64_t, uint64_t>> time_collection;
+auto time_collection = std::array<std::tuple<int64_t, int64_t>, 200>{};
+auto time_collection_view = cyclic::CyclicView(time_collection, 200);
 
 int main(int argc, char** argv) {
     if (argc != 2) {
@@ -83,7 +75,8 @@ int main(int argc, char** argv) {
             std::cout << "Mavlink time since boot: " << mavlink_boot_time_ms.count() << " ms\n";
             std::cout << "-------------------\n";
 
-            insert_and_limit(time_collection, std::make_tuple(steady_time_ms.count(), mavlink_boot_time_ms.count()), 200);
+            // insert_and_limit(time_collection, std::make_tuple(steady_time_ms.count(), mavlink_boot_time_ms.count()), 200);
+            time_collection_view.push(std::make_tuple(steady_time_ms.count(), mavlink_boot_time_ms.count()));
 
             double avg_diff = calculate_average_difference(time_collection);
             std::cout << "Average difference: " << avg_diff << " ms\n";

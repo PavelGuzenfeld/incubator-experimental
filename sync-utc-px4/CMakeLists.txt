@@ -45,7 +45,11 @@ endif()
 
 # find dependencies
 find_package(MAVSDK REQUIRED)
-include_directories(/usr/include/mavsdk/ include)
+find_package(cyclic_view REQUIRED)
+
+# Add include directories for MAVSDK and cyclic_view
+include_directories(${MAVSDK_INCLUDE_DIRS} ${cyclic_view_INCLUDE_DIRS} include)
+message("cyclic_view_INCLUDE_DIRS: ${cyclic_view_INCLUDE_DIRS}")
 
 add_executable(mavsdk-timesync src/mavsdk-timesync.cpp src/mavsdk_connector.cpp)
 target_link_libraries(mavsdk-timesync MAVSDK::mavsdk -lrt -lpthread)
