@@ -1,8 +1,9 @@
 #pragma once
 
-#include <iterator>
-#include <type_traits>
 #include <cassert>
+#include <iterator>
+#include <span>
+#include <type_traits>
 
 namespace cyclic {
 

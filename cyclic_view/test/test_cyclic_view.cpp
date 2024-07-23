@@ -1,6 +1,6 @@
 #define CATCH_CONFIG_MAIN
+#include "cyclic_view/cyclic_view.hpp"
 #include <catch2/catch.hpp>
-#include "cyclic_view.hpp"
 
 using namespace cyclic;
 
