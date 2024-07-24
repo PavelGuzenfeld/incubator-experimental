@@ -77,7 +77,13 @@ namespace cyclic
         constexpr CyclicView(ContainerType &container, size_type capacity, size_type start = 0)
             : container_(container), capacity_(capacity), start_(start), size_(container.size()), push_index_(start)
         {
-            assert(start < size_ && "Invalid start index for CyclicView");
+            assert(((start == 0 && size_ == 0) || (start < size_)) && "Invalid start index for CyclicView");
+        }
+        template <typename T, size_t N>
+        constexpr CyclicView(std::array<typename ContainerType::value_type, N> &array, size_type size = 0, size_type start = 0)
+            : container_(array), capacity_(N), start_(start), size_(size), push_index_(start)
+        {
+            assert(((start == 0 && size_ == 0) || (start < size_)) && "Invalid start index for CyclicView");
         }
 
         [[nodiscard]] constexpr const auto &operator[](size_type index) const
@@ -88,6 +94,12 @@ namespace cyclic
         [[nodiscard]] constexpr size_type size() const noexcept
         {
             return container_.size();
+        }
+
+        template<typename T, size_t N>
+        [[nodiscard]] constexpr size_type size(const std::array<T, N>&) const noexcept
+        {
+            return size_;
         }
 
         iterator begin()
@@ -112,33 +124,30 @@ namespace cyclic
 
         void push(const typename ContainerType::value_type &value)
         {
-            if (container_.size() < capacity_)
+            if (this->size() < capacity_)
             {
-                insert_element(container_, container_.size() + push_index_, value);
+                insert_element(container_, this->size() + push_index_, value);
             }
             else
             {
                 container_[push_index_] = value;
-                start_ = (start_ + 1) % container_.size();
+                start_ = (start_ + 1) % this->size();
             }
-            push_index_ = (push_index_ + 1) % container_.size();
+            push_index_ = (push_index_ + 1) % this->size();
         }
 
     private:
         template <typename C>
         void insert_element(C &container, size_type index, const typename C::value_type &value)
         {
-           auto result = container.insert(container.begin() + index, value);
-           if (result == container.end())
-           {
-               container.insert(container.end(), value);
-           }
+            container.emplace(container.begin() + index, value);
         }
 
         template <typename T, size_t N>
         void insert_element(std::array<T, N> &container, size_type index, const T &value)
         {
             container[index] = value;
+            ++size_;
         }
 
         // bool invariant() const
@@ -227,6 +236,9 @@ namespace cyclic
     // Deduction guide
     template <typename ContainerType>
     CyclicView(ContainerType &, typename ContainerType::size_type, typename ContainerType::size_type) -> CyclicView<ContainerType>;
+
+    template <typename ContainerType>
+    CyclicView(ContainerType &) -> CyclicView<ContainerType>;
 
     template <typename T>
     CyclicView(T *, size_t, size_t) -> CyclicView<T *>;
