@@ -1,46 +1,17 @@
-#include "cyclic_view/cyclic_view.hpp"
 #include "mavsdk_connector.hpp"
+#include "sliding_window.hpp"
+#include "arithmetic_algorithm.hpp"
 #include <chrono>
-#include <concepts>
 #include <cstdint>
 #include <functional>
 #include <iostream>
 #include <mavsdk/mavsdk.h>
 #include <mavsdk/plugins/mavlink_passthrough/mavlink_passthrough.h>
-#include <memory>
-#include <numeric>
-#include <ranges>
 #include <thread>
-#include <type_traits>
-#include <utility>
-
-template<typename T>
-concept Arithmetic = std::is_arithmetic_v<T>;
-
-template<typename T>
-concept ArithmeticPair = requires(T a) {
-    { std::get<0>(a) } -> std::convertible_to<Arithmetic>;
-    { std::get<1>(a) } -> std::convertible_to<Arithmetic>;
-};
-
-template<typename T>
-concept ArithmeticPairCollection = requires(T a) {
-    { a.begin() } -> std::input_iterator;
-    { a.end() } -> std::input_iterator;
-    requires ArithmeticPair<typename T::value_type>;
-};
-
-constexpr auto calculate_average_difference(const ArithmeticPairCollection auto& collection) {
-    return std::transform_reduce(collection.begin(), collection.end(), 0.0, std::plus<>(), [](const auto& pair) {
-        auto [first, second] = pair;
-        return first - second;
-    }) / static_cast<double>(collection.size());
-}
 
 
-auto time_collection = std::array<std::tuple<int64_t, int64_t>, 200>{};
-auto time_collection_view = cyclic::CyclicView(time_collection, 200);
-
+using TimeCollection = SlideWindow<std::tuple<int64_t, int64_t>, 200>;
+auto time_collection = TimeCollection{};
 int main(int argc, char** argv) {
     if (argc != 2) {
         std::cerr << "Usage: " << argv[0] << " <connection_url>\n";
@@ -76,7 +47,7 @@ int main(int argc, char** argv) {
             std::cout << "-------------------\n";
 
             // insert_and_limit(time_collection, std::make_tuple(steady_time_ms.count(), mavlink_boot_time_ms.count()), 200);
-            time_collection_view.push(std::make_tuple(steady_time_ms.count(), mavlink_boot_time_ms.count()));
+            time_collection.push(std::make_tuple(steady_time_ms.count(), mavlink_boot_time_ms.count()));
 
             double avg_diff = calculate_average_difference(time_collection);
             std::cout << "Average difference: " << avg_diff << " ms\n";
