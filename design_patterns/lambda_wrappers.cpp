@@ -3,7 +3,7 @@
 template <typename F>
 constexpr auto make_lambda(F &&f)
 {
-    return [f = std::forward<F>(f)]<typename... Args>(Args &&...args)
+    return [f = std::forward<F>(f)]<typename... Args>(Args &&...args) mutable
     {
         if constexpr (std::is_void_v<decltype(f(std::forward<Args>(args)...))>)
         {
