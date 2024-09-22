@@ -32,14 +32,12 @@ c_to_ctypes_translation = {
     "uint64_t": c_uint64,
 }
 
-
 def gpp_preprocess(header_path, flags=None):
     if flags is None:
         flags = []
     return subprocess.run(
         ["g++", "-E"] + flags + [header_path], check=True, capture_output=True, text=True
     ).stdout
-
 
 def preprocess_headers(headers, preprocess_function, flags=None):
     preprocessed_contents = {}
@@ -52,7 +50,6 @@ def preprocess_headers(headers, preprocess_function, flags=None):
         except subprocess.CalledProcessError as e:
             print(f"Error preprocessing {header}: {e}")
     return preprocessed_contents
-
 
 def resolve_type(field_type):
     """Resolve namespaced or complex types, including enums."""
@@ -77,7 +74,6 @@ def resolve_type(field_type):
     print(f"Warning: Unrecognized field type {field_type}")
     return None
 
-
 def handle_array_type(field_type):
     """Handle C array types like unsigned char[7]."""
     match = re.match(r'(.+)\[(\d+)\]', field_type)
@@ -90,7 +86,6 @@ def handle_array_type(field_type):
             return resolved_type * array_size
         print(f"Warning: Unable to resolve base type for array {field_type}")
     return None
-
 
 def extract_fields_from_struct(struct):
     """Extract fields from the struct, handling nested structs, typedefs, arrays, and bitfields."""
@@ -122,7 +117,6 @@ def extract_fields_from_struct(struct):
                 print(f"Warning: Could not resolve field {field.spelling} of type {field_type}")
     return fields
 
-
 def set_libclang_path():
     try:
         libclang_path = subprocess.check_output(['llvm-config', '--libdir']).decode().strip()
@@ -130,7 +124,6 @@ def set_libclang_path():
     except subprocess.CalledProcessError as e:
         print(f"Failed to set libclang path: {e}")
         raise
-
 
 def find_struct(node, struct_name):
     if node.kind == clang.cindex.CursorKind.STRUCT_DECL:
@@ -146,7 +139,6 @@ def find_struct(node, struct_name):
             return result
     return None
 
-
 def cache_enum_types(node):
     """Cache enum types and their underlying sizes."""
     if node.kind == clang.cindex.CursorKind.ENUM_DECL:
@@ -158,6 +150,10 @@ def cache_enum_types(node):
         enum_cache[enum_name] = underlying_ctype
         print(f"Cached enum {enum_name} with underlying type {underlying_ctype}")
 
+        # Traverse enum fields to ensure all cases are processed
+        for enum_field in node.get_children():
+            print(f"Enum Field: {enum_field.spelling} -> Value: {enum_field.enum_value}")
+
 
 def resolve_enum_underlying_type(enum_name):
     """Resolve enum class types to their underlying types using cache."""
@@ -166,7 +162,6 @@ def resolve_enum_underlying_type(enum_name):
     else:
         print(f"Warning: Enum {enum_name} not cached.")
         return None
-
 
 def make_ctype_struct(header_path: str, struct_name: str, preprocessor=gpp_preprocess, flags=None):
     set_libclang_path()
@@ -191,7 +186,6 @@ def make_ctype_struct(header_path: str, struct_name: str, preprocessor=gpp_prepr
         raise ValueError(f"No fields found in struct {struct_name}")
     return type(struct_name, (Structure,), {"_fields_": fields, "_pack_": 1})
 
-
 def print_structure_hierarchy(struct, indent=0):
     """Recursively print the structure hierarchy."""
     print(" " * indent + f"Struct: {struct.__name__}")
@@ -205,7 +199,6 @@ def print_structure_hierarchy(struct, indent=0):
             print(" " * (indent + 2) + f"Field: {field[0]} -> Array [{field[1]._length_}] of {field[1]._type_.__name__}")
         else:
             print(" " * (indent + 2) + f"Field: {field[0]} -> {field[1].__name__}")
-
 
 if __name__ == "__main__":
     headers = [
