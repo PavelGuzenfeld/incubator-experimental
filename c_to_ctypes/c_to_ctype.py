@@ -60,25 +60,44 @@ def preprocess_headers(headers, preprocess_function):
 
 
 def find_struct(node, struct_name):
-    """Recursively find the struct definition in the AST node."""
-    if (
-        node.kind == clang.cindex.CursorKind.STRUCT_DECL
-        and node.spelling == struct_name
-    ):
-        return node
+    """Recursively find the struct or typedef definition in the AST node."""
+    if node.kind == clang.cindex.CursorKind.STRUCT_DECL:
+        # Found a struct, print its name or 'anonymous' if unnamed
+        print(f"Found struct: '{node.spelling or 'anonymous'}'")
+
+    # Look for a typedef declaration
+    if node.kind == clang.cindex.CursorKind.TYPEDEF_DECL and node.spelling == struct_name:
+        print(f"Found typedef: '{node.spelling}'")
+        # Search for the associated struct
+        for child in node.get_children():
+            if child.kind == clang.cindex.CursorKind.STRUCT_DECL:
+                return child
+
+    # Continue searching in child nodes
     for child in node.get_children():
         result = find_struct(child, struct_name)
         if result is not None:
             return result
+
     return None
 
 
+def set_libclang_path():
+    try:
+        libclang_path = subprocess.check_output(['llvm-config', '--libdir']).decode().strip()
+        clang.cindex.Config.set_library_file(os.path.join(libclang_path, 'libclang.so'))
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to set libclang path: {e}")
+        raise
+
 def make_ctype_struct(header_path: str, struct_name: str, preprocessor=gpp_preprocess):
+    # Set up libclang dynamically
+    set_libclang_path()
+
     # Preprocess the header
     preprocessed = preprocessor(header_path)
 
-    # Set up libclang
-    clang.cindex.Config.set_library_file("/usr/lib/llvm-14/lib/libclang.so")
+    # Create the Clang index and parse
     index = clang.cindex.Index.create()
     translation_unit = index.parse(
         "dummy.cpp",
@@ -100,30 +119,59 @@ def make_ctype_struct(header_path: str, struct_name: str, preprocessor=gpp_prepr
                 ctype = c_to_ctypes_translation[field_type]
                 fields.append((field.spelling, ctype))
 
+    if not fields:
+        raise ValueError(f"No fields found in struct {struct_name}")
+
     # Dynamically create the ctypes structure
     Struct = type(struct_name, (Structure,), {"_fields_": fields})
     return Struct
 
 
+def find_struct(node, struct_name):
+    """Recursively find the struct or typedef definition in the AST node."""
+    if node.kind == clang.cindex.CursorKind.STRUCT_DECL:
+        # Found a struct, print its name or 'anonymous' if unnamed
+        print(f"Found struct: '{node.spelling or 'anonymous'}'")
+
+    if node.kind == clang.cindex.CursorKind.TYPEDEF_DECL:
+        print(f"Found typedef: '{node.spelling}'")
+        if node.spelling == struct_name:
+            # Search for the associated struct
+            for child in node.get_children():
+                if child.kind == clang.cindex.CursorKind.STRUCT_DECL:
+                    print(f"Typedef '{struct_name}' points to a struct.")
+                    return child
+
+    # Continue searching in the child nodes
+    for child in node.get_children():
+        result = find_struct(child, struct_name)
+        if result is not None:
+            return result
+
+    return None
+
+
+
 if __name__ == "__main__":
     # Example usage
     headers = [
-        "/home/pavel/workspace/rocx/rocx_mission_control/include/rocx_mission_control/icd/mmc_fcu_msgs.h",
         "/home/pavel/workspace/rocx/rocx_mission_control/include/rocx_mission_control/icd/fcu_mmc_msgs.h",
+        "/home/pavel/workspace/rocx/rocx_mission_control/include/rocx_mission_control/icd/mmc_fcu_msgs.h",
     ]
 
     # Choose your preprocessing function here
     preprocessed = preprocess_headers(headers, gpp_preprocess)
-    # Or, for Clang: preprocessed = preprocess_headers(headers, clang_preprocess)
 
     for header, content in preprocessed.items():
-        print(
-            f"Preprocessed content of {header}:\n{content[:100]}\n..."
-        )  # Print first 500 chars
+        print(f"Preprocessed content of {header}:\n{content[:500]}\n...")
 
-    # Create a ctypes structure from a header file
-    struct = make_ctype_struct(headers[0], "ROCX_VER_S")
+    # Create a ctypes structure from the correct header file
+    struct = make_ctype_struct(headers[1], "MCC_FCU_TLM_DATA_S")
 
     # Create an instance of the structure
     instance = struct()
     print(f"Size of structure: {sizeof(instance)} bytes")
+    print(f"Fields of the structure: {instance._fields_}")
+    print(f"Instance of the structure: {instance}")
+    print(f"Instance of the structure as bytes: {bytes(instance)}")
+
