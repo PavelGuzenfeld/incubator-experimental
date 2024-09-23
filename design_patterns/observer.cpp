@@ -15,7 +15,7 @@ public:
     constexpr void onNotify(Args &&...args) const
     {
         // Correctly cast `this` to the derived class and call the derived implementation of `onNotify`
-        static_cast<const Derived *>(this)->onNotify(forward<Args>(args)...);
+        static_cast<const Derived *>(this)->onNotify(std::forward<Args>(args)...);
     }
 };
 
@@ -29,7 +29,7 @@ private:
 public:
     // Constructor accepts a list of observers
     constexpr Observable(array<reference_wrapper<Observer<T, Derived>>, N> &&observersList)
-        : observers(move(observersList)) {}
+        : observers(std::move(observersList)) {}
 
     // Notify all observers with perfect forwarding
     template <typename... Args>
@@ -37,7 +37,7 @@ public:
     {
         for (const auto &observer : observers)
         {
-            observer.get().onNotify(forward<Args>(args)...); // Use `get()` to access the underlying observer
+            observer.get().onNotify(std::forward<Args>(args)...); // Use `get()` to access the underlying observer
         }
     }
 };
