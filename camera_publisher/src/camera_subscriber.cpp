@@ -42,7 +42,7 @@ private:
     void display_stats()
     {
         frame_count_++;
-        std::cout << "Frame Count: " << frame_count_ << std::endl;
+        std::cout << "Frame Count: " << frame_count_ << "\n";
 
         if (!latencies_.empty() && !frame_times_.empty())
         {
@@ -58,10 +58,10 @@ private:
                 return sum + (fps - avg_fps) * (fps - avg_fps);
             }) / frame_times_.size());
 
-            std::cout << "Average Latency: " << avg_latency << " ms" << std::endl;
-            std::cout << "Latency Std Dev: " << latency_stddev << " ms" << std::endl;
-            std::cout << "Average FPS: " << avg_fps << std::endl;
-            std::cout << "FPS Std Dev: " << fps_stddev << std::endl;
+            std::cout << "Average Latency: " << avg_latency << " ms\n";
+            std::cout << "Latency Std Dev: " << latency_stddev << " ms\n";
+            std::cout << "Average FPS: " << avg_fps << "\n";
+            std::cout << "FPS Std Dev: " << fps_stddev << "\n";
         }
     }
 
