@@ -28,7 +28,7 @@ private:
     {
         auto msg = publisher_->borrow_loaned_message();
         msg.get().timestamp = rclcpp::Time(timestamp);
-        std::copy(frame.begin(), frame.end(),  msg.get().data.begin());
+        std::ranges::copy(frame.begin(), frame.end(),  msg.get().data.begin());
 
         publisher_->publish(std::move(msg));
         auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - std::chrono::steady_clock::time_point(std::chrono::nanoseconds(timestamp))).count();
