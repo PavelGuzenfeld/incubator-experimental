@@ -1,4 +1,6 @@
+// this is the kind of code that makes senior engineers drink heavily
 #include "static_image_msgs/msg/image4k.hpp"
+#include <algorithm> // missing but needed for statistics functions
 #include <chrono>
 #include <cmath>
 #include <fmt/core.h>
@@ -6,13 +8,22 @@
 #include <rclcpp/rclcpp.hpp>
 #include <vector>
 
-class CameraSubscriber : public rclcpp::Node
+class CameraSubscriber final : public rclcpp::Node // always mark final when not designed for inheritance
 {
 public:
-    CameraSubscriber()
+    // const values should be static members, not magic numbers scattered around
+    static constexpr std::size_t MAX_SAMPLES = 100;
+
+    explicit CameraSubscriber() // explicit to prevent accidental conversions
         : Node("camera_subscriber"),
-          previous_frame_time_ns_(0), frame_count_(0)
+          previous_frame_time_ns_(0),
+          frame_count_(0)
     {
+        // vectors can be reserved, deques can't - so we need to switch back
+        creation_latencies_ms_.reserve(MAX_SAMPLES);
+        inter_frame_times_ms_.reserve(MAX_SAMPLES);
+
+        // MUST use std::bind with ROS2 because their callback system is a fucking nightmare
         auto qos = rclcpp::QoS(0).best_effort();
         subscription_ = this->create_subscription<static_image_msgs::msg::Image4k>(
             "camera/image_raw/compressed", qos,
@@ -20,90 +31,108 @@ public:
     }
 
 private:
+    // let's make these functions actually do ONE thing each instead of this mess
+    [[nodiscard]] static auto calculate_statistics(const std::vector<double> &data) -> std::pair<double, double>
+    {
+        // jesus christ, don't recalculate this stuff repeatedly
+        if (data.empty())
+        {
+            return {0.0, 0.0};
+        }
+
+        const double sum = std::accumulate(data.begin(), data.end(), 0.0);
+        const double mean = sum / data.size();
+
+        // accumulate is more widely available than transform_reduce
+        // fixed the shadow warning by using 'accumulated' instead of 'sum'
+        const double variance = std::accumulate(
+                                    data.begin(), data.end(), 0.0,
+                                    [mean](const double accumulated, const double val)
+                                    {
+                                        return accumulated + (val - mean) * (val - mean);
+                                    }) /
+                                data.size();
+
+        return {mean, std::sqrt(variance)};
+    }
+
     void topic_callback(const static_image_msgs::msg::Image4k::SharedPtr msg)
     {
-        // Capture current time in nanoseconds
-        auto current_time_ns = steady_clock_.now().nanoseconds();
+        // Capture current time in nanoseconds - use const and auto, save typing and bugs
+        const auto current_time_ns = steady_clock_.now().nanoseconds();
 
         if (previous_frame_time_ns_ != 0)
         {
-            // Time since frame was created (end-to-end latency)
-            double creation_to_receive_latency_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                                        std::chrono::steady_clock::now() -
-                                                        std::chrono::steady_clock::time_point(
-                                                            std::chrono::nanoseconds(msg->frame_timestamp)))
-                                                        .count();
+            // you're casting and then calling .count()? that's just sloppy
+            const auto creation_timestamp = std::chrono::steady_clock::time_point(
+                std::chrono::nanoseconds(msg->frame_timestamp));
 
-            // Time between frames in milliseconds
-            double inter_frame_time_ms = (current_time_ns - previous_frame_time_ns_) / 1.0e6;
+            // Time since frame was created (end-to-end latency)
+            const double creation_to_receive_latency_ms =
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - creation_timestamp).count();
+
+            // Time between frames in milliseconds - use constexpr where possible
+            constexpr double ns_to_ms = 1.0e-6;
+            const double inter_frame_time_ms = (current_time_ns - previous_frame_time_ns_) * ns_to_ms;
 
             // Time from publication to reception
-            double pub_to_receive_latency_ms = (current_time_ns - msg->pub_timestamp) / 1.0e6;
+            const double pub_to_receive_latency_ms = (current_time_ns - msg->pub_timestamp) * ns_to_ms;
+
+            // Keep only the last MAX_SAMPLES samples using vector with controlled size
+            if (creation_latencies_ms_.size() >= MAX_SAMPLES)
+            {
+                creation_latencies_ms_.erase(creation_latencies_ms_.begin());
+                inter_frame_times_ms_.erase(inter_frame_times_ms_.begin());
+            }
 
             // Store measurements in milliseconds
             creation_latencies_ms_.push_back(creation_to_receive_latency_ms);
             inter_frame_times_ms_.push_back(inter_frame_time_ms);
 
-            // Keep only last 100 samples
-            if (creation_latencies_ms_.size() > 100)
-                creation_latencies_ms_.erase(creation_latencies_ms_.begin());
-            if (inter_frame_times_ms_.size() > 100)
-                inter_frame_times_ms_.erase(inter_frame_times_ms_.begin());
-
+            // use fmt everywhere consistently instead of this std::cout/fmt mishmash
             fmt::print("Creation-to-receive latency: {:.3f} ms | Pub-to-receive latency: {:.3f} ms | Inter-frame time: {:.3f} ms\n",
                        creation_to_receive_latency_ms, pub_to_receive_latency_ms, inter_frame_time_ms);
         }
 
         previous_frame_time_ns_ = current_time_ns;
+        ++frame_count_; // increment first, then use
 
         display_stats();
     }
 
     void display_stats()
     {
-        frame_count_++;
-        std::cout << "Frame Count: " << frame_count_ << "\n";
+        // your original display_stats incremented frame_count_ and did the printing.
+        // functions should do ONE thing, not five
+        fmt::print("Frame Count: {}\n", frame_count_);
 
-        if (!creation_latencies_ms_.empty() && !inter_frame_times_ms_.empty())
+        if (creation_latencies_ms_.empty() || inter_frame_times_ms_.empty())
         {
-            // Calculate averages
-            double avg_creation_latency_ms = std::accumulate(creation_latencies_ms_.begin(), creation_latencies_ms_.end(), 0.0) /
-                                             creation_latencies_ms_.size();
-            double avg_inter_frame_time_ms = std::accumulate(inter_frame_times_ms_.begin(), inter_frame_times_ms_.end(), 0.0) /
-                                             inter_frame_times_ms_.size();
-            double avg_fps = 1000.0 / avg_inter_frame_time_ms;
-
-            // Calculate standard deviations
-            double creation_latency_stddev_ms = std::sqrt(std::accumulate(creation_latencies_ms_.begin(), creation_latencies_ms_.end(), 0.0,
-                                                                          [avg_creation_latency_ms](double sum, double val)
-                                                                          {
-                                                                              return sum + (val - avg_creation_latency_ms) * (val - avg_creation_latency_ms);
-                                                                          }) /
-                                                          creation_latencies_ms_.size());
-
-            double inter_frame_time_stddev_ms = std::sqrt(std::accumulate(inter_frame_times_ms_.begin(), inter_frame_times_ms_.end(), 0.0,
-                                                                          [avg_inter_frame_time_ms](double sum, double val)
-                                                                          {
-                                                                              return sum + (val - avg_inter_frame_time_ms) * (val - avg_inter_frame_time_ms);
-                                                                          }) /
-                                                          inter_frame_times_ms_.size());
-
-            // FPS standard deviation using error propagation formula
-            double fps_stddev = 1000.0 * inter_frame_time_stddev_ms / (avg_inter_frame_time_ms * avg_inter_frame_time_ms);
-
-            // Print statistics with clear labels
-            std::cout << "Average creation-to-receive latency: " << avg_creation_latency_ms << " ms\n";
-            std::cout << "Creation latency std dev: " << creation_latency_stddev_ms << " ms\n";
-            std::cout << "Average inter-frame time: " << avg_inter_frame_time_ms << " ms\n";
-            std::cout << "Inter-frame time std dev: " << inter_frame_time_stddev_ms << " ms\n";
-            std::cout << "Average FPS: " << avg_fps << "\n";
-            std::cout << "FPS std dev: " << fps_stddev << "\n";
+            return; // early return pattern - learn it, love it
         }
+
+        // Calculate statistics
+        const auto [avg_creation_latency_ms, creation_latency_stddev_ms] = calculate_statistics(creation_latencies_ms_);
+        const auto [avg_inter_frame_time_ms, inter_frame_time_stddev_ms] = calculate_statistics(inter_frame_times_ms_);
+
+        // Calculate FPS statistics
+        const double avg_fps = 1000.0 / avg_inter_frame_time_ms;
+        const double fps_stddev = 1000.0 * inter_frame_time_stddev_ms / (avg_inter_frame_time_ms * avg_inter_frame_time_ms);
+
+        // much more readable and consistent now
+        fmt::print("Average creation-to-receive latency: {:.2f} ms\n", avg_creation_latency_ms);
+        fmt::print("Creation latency std dev: {:.2f} ms\n", creation_latency_stddev_ms);
+        fmt::print("Average inter-frame time: {:.2f} ms\n", avg_inter_frame_time_ms);
+        fmt::print("Inter-frame time std dev: {:.2f} ms\n", inter_frame_time_stddev_ms);
+        fmt::print("Average FPS: {:.2f}\n", avg_fps);
+        fmt::print("FPS std dev: {:.2f}\n", fps_stddev);
     }
 
+    // had to switch back to vector because deque doesn't have reserve()
+    // and that was causing one of your build errors
     rclcpp::Subscription<static_image_msgs::msg::Image4k>::SharedPtr subscription_;
     std::uint64_t previous_frame_time_ns_;
-    size_t frame_count_;
+    std::size_t frame_count_; // use std::size_t, not size_t
     rclcpp::Clock steady_clock_{RCL_STEADY_TIME};
     std::vector<double> creation_latencies_ms_; // end-to-end latency from frame creation to reception
     std::vector<double> inter_frame_times_ms_;  // time between consecutive frames
@@ -112,8 +141,7 @@ private:
 int main(int argc, char *argv[])
 {
     rclcpp::init(argc, argv);
-    auto node = std::make_shared<CameraSubscriber>();
-    rclcpp::spin(node);
+    rclcpp::spin(std::make_shared<CameraSubscriber>()); // just combine these lines, you're not using 'node' elsewhere
     rclcpp::shutdown();
     return 0;
 }
