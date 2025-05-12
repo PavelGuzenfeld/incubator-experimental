@@ -28,8 +28,8 @@ private:
     {
 
         auto msg = publisher_->borrow_loaned_message();
-        msg.get().frame_timestamp = rclcpp::Time(timestamp, RCL_STEADY_TIME);
-        msg.get().pub_timestamp = steady_clock_.now();
+        msg.get().frame_timestamp = timestamp;
+        msg.get().pub_timestamp = steady_clock_.now().nanoseconds();
         std::ranges::copy(frame.begin(), frame.end(), msg.get().data.begin());
 
         publisher_->publish(std::move(msg));

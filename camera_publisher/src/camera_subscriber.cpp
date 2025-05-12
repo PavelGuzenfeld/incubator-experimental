@@ -11,7 +11,7 @@ class CameraSubscriber : public rclcpp::Node
 public:
     CameraSubscriber()
         : Node("camera_subscriber"),
-          previous_ros_time_(0, 0, RCL_STEADY_TIME), frame_count_(0)
+          previous_ros_time_(0), frame_count_(0)
     {
         auto qos = rclcpp::QoS(0).best_effort();
         subscription_ = this->create_subscription<static_image_msgs::msg::Image4k>(
@@ -23,22 +23,18 @@ private:
     void topic_callback(const static_image_msgs::msg::Image4k::SharedPtr msg)
     {
         // grab "now" from the steady clock
-        auto now = steady_clock_.now();
+        auto now = steady_clock_.now().nanoseconds();
 
-        // frame timestamps are already steady time domain
-        rclcpp::Time frame_creation_time(msg->frame_timestamp, RCL_STEADY_TIME);
-        rclcpp::Time frame_pub_time(msg->pub_timestamp, RCL_STEADY_TIME);
-
-        if (previous_ros_time_ != rclcpp::Time(0, 0, RCL_STEADY_TIME))
+        if (previous_ros_time_ != 0)
         {
-            auto latency_creation = now - frame_creation_time;
-            auto latency_pub = now - frame_pub_time;
+            auto latency_creation = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - std::chrono::steady_clock::time_point(std::chrono::nanoseconds(msg->frame_timestamp))).count();
+            auto latency_pub = now - msg->pub_timestamp;
 
-            double latency_creation_ms = latency_creation.seconds() * 1000.0;
-            double latency_pub_ms = latency_pub.seconds() * 1000.0;
+            double latency_creation_ms = latency_creation;
+            double latency_pub_ms = latency_pub / 1e6;
 
             latencies_.push_back(latency_creation_ms);
-            frame_times_.push_back((now - previous_ros_time_).seconds() * 1000.0);
+            frame_times_.push_back(latency_pub_ms);
 
             if (latencies_.size() > 100)
                 latencies_.erase(latencies_.begin());
@@ -82,7 +78,7 @@ private:
     }
 
     rclcpp::Subscription<static_image_msgs::msg::Image4k>::SharedPtr subscription_;
-    rclcpp::Time previous_ros_time_;
+    std::uint64_t previous_ros_time_;
     size_t frame_count_;
     rclcpp::Clock steady_clock_{RCL_STEADY_TIME};
     std::vector<double> latencies_;
