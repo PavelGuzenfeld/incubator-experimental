@@ -117,8 +117,8 @@ private:
 
         // Calculate FPS statistics
         const double avg_fps = 1000.0 / avg_inter_frame_time_ms;
-        const double fps_stddev = 1000.0 * inter_frame_time_stddev_ms / (avg_inter_frame_time_ms * avg_inter_frame_time_ms);
-
+        // The correct error propagation formula for f = 1000/x is: σf = |f/x| * σx = (1000/x²) * σx
+        const double fps_stddev = avg_fps * (inter_frame_time_stddev_ms / avg_inter_frame_time_ms);
         // much more readable and consistent now
         fmt::print("Average creation-to-receive latency: {:.2f} ms\n", avg_creation_latency_ms);
         fmt::print("Creation latency std dev: {:.2f} ms\n", creation_latency_stddev_ms);
