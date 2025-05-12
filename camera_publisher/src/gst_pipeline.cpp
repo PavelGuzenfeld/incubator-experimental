@@ -28,9 +28,9 @@ static GstFlowReturn on_new_sample(GstElement*)
 
     GstClockTime buffer_pts = GST_BUFFER_PTS(buffer);
     GstClockTime monotonic_ts = buffer_pts + gst_pipeline_.base_time_;
-    auto buffer_time = std::chrono::steady_clock::time_point(std::chrono::nanoseconds(monotonic_ts));
+    auto buffer_time = static_cast<uint64_t>(monotonic_ts);
 
-    gst_pipeline_.frame_callback_(buffer_time.time_since_epoch().count(), map.size, "i420", std::span<unsigned char>(map.data, map.size));
+    gst_pipeline_.frame_callback_(buffer_time, map.size, "i420", std::span<unsigned char>(map.data, map.size));
 
     gst_buffer_unmap(buffer, &map);
     gst_sample_unref(sample);

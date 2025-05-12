@@ -33,6 +33,7 @@ add_compile_options(-O3)
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(static_image_msgs REQUIRED)
+find_package(fmt REQUIRED)
 
 # Use pkg-config to find GStreamer
 find_package(PkgConfig REQUIRED)
@@ -45,10 +46,11 @@ link_directories(${GST_LIBRARY_DIRS} ${GST_BASE_LIBRARY_DIRS} ${GST_APP_LIBRARY_
 
 add_executable(camera_publisher src/camera_publisher.cpp src/gst_pipeline.cpp)
 ament_target_dependencies(camera_publisher rclcpp static_image_msgs)
-target_link_libraries(camera_publisher ${GST_LIBRARIES} ${GST_BASE_LIBRARIES} ${GST_APP_LIBRARIES})
+target_link_libraries(camera_publisher ${GST_LIBRARIES} ${GST_BASE_LIBRARIES} ${GST_APP_LIBRARIES} )
 
 
 add_executable(camera_subscriber src/camera_subscriber.cpp)
+target_link_libraries(camera_subscriber fmt::fmt)
 ament_target_dependencies(camera_subscriber rclcpp static_image_msgs)
 
 install(TARGETS

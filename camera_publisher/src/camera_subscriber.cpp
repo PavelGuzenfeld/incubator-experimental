@@ -1,15 +1,17 @@
-#include <rclcpp/rclcpp.hpp>
 #include "static_image_msgs/msg/image4k.hpp"
-#include <vector>
-#include <numeric>
-#include <cmath>
 #include <chrono>
+#include <cmath>
+#include <fmt/core.h>
+#include <numeric>
+#include <rclcpp/rclcpp.hpp>
+#include <vector>
 
 class CameraSubscriber : public rclcpp::Node
 {
 public:
     CameraSubscriber()
-    : Node("camera_subscriber"), frame_count_(0)
+        : Node("camera_subscriber"),
+          previous_ros_time_(0, 0, RCL_STEADY_TIME), frame_count_(0)
     {
         auto qos = rclcpp::QoS(0).best_effort();
         subscription_ = this->create_subscription<static_image_msgs::msg::Image4k>(
@@ -20,21 +22,34 @@ public:
 private:
     void topic_callback(const static_image_msgs::msg::Image4k::SharedPtr msg)
     {
-        auto now = std::chrono::steady_clock::now();
-        auto msg_time = rclcpp::Time(msg->timestamp);
+        // grab "now" from the steady clock
+        auto now = steady_clock_.now();
 
-        if (previous_steady_time_ != std::chrono::steady_clock::time_point())
+        // frame timestamps are already steady time domain
+        rclcpp::Time frame_creation_time(msg->frame_timestamp, RCL_STEADY_TIME);
+        rclcpp::Time frame_pub_time(msg->pub_timestamp, RCL_STEADY_TIME);
+
+        if (previous_ros_time_ != rclcpp::Time(0, 0, RCL_STEADY_TIME))
         {
-            auto delta_ns = now - previous_steady_time_;
-            double latency = std::chrono::duration_cast<std::chrono::nanoseconds>(delta_ns).count() / 1e6; // ms
+            auto latency_creation = now - frame_creation_time;
+            auto latency_pub = now - frame_pub_time;
 
-            latencies_.push_back(latency);
-            frame_times_.push_back(std::chrono::duration_cast<std::chrono::milliseconds>(delta_ns).count());
-            if (latencies_.size() > 100) latencies_.erase(latencies_.begin());
-            if (frame_times_.size() > 100) frame_times_.erase(frame_times_.begin());
+            double latency_creation_ms = latency_creation.seconds() * 1000.0;
+            double latency_pub_ms = latency_pub.seconds() * 1000.0;
+
+            latencies_.push_back(latency_creation_ms);
+            frame_times_.push_back((now - previous_ros_time_).seconds() * 1000.0);
+
+            if (latencies_.size() > 100)
+                latencies_.erase(latencies_.begin());
+            if (frame_times_.size() > 100)
+                frame_times_.erase(frame_times_.begin());
+
+            fmt::print("Latency since creation: {:.3f} ms | Latency since pub: {:.3f} ms\n",
+                       latency_creation_ms, latency_pub_ms);
         }
 
-        previous_steady_time_ = now;
+        previous_ros_time_ = now;
 
         display_stats();
     }
@@ -49,14 +64,15 @@ private:
             double avg_latency = std::accumulate(latencies_.begin(), latencies_.end(), 0.0) / latencies_.size();
             double avg_fps = 1000.0 / (std::accumulate(frame_times_.begin(), frame_times_.end(), 0.0) / frame_times_.size());
 
-            double latency_stddev = std::sqrt(std::accumulate(latencies_.begin(), latencies_.end(), 0.0, [avg_latency](double sum, double val) {
-                return sum + (val - avg_latency) * (val - avg_latency);
-            }) / latencies_.size());
+            double latency_stddev = std::sqrt(std::accumulate(latencies_.begin(), latencies_.end(), 0.0, [avg_latency](double sum, double val)
+                                                              { return sum + (val - avg_latency) * (val - avg_latency); }) /
+                                              latencies_.size());
 
-            double fps_stddev = std::sqrt(std::accumulate(frame_times_.begin(), frame_times_.end(), 0.0, [avg_fps](double sum, double val) {
+            double fps_stddev = std::sqrt(std::accumulate(frame_times_.begin(), frame_times_.end(), 0.0, [avg_fps](double sum, double val)
+                                                          {
                 double fps = 1000.0 / val;
-                return sum + (fps - avg_fps) * (fps - avg_fps);
-            }) / frame_times_.size());
+                return sum + (fps - avg_fps) * (fps - avg_fps); }) /
+                                          frame_times_.size());
 
             std::cout << "Average Latency: " << avg_latency << " ms\n";
             std::cout << "Latency Std Dev: " << latency_stddev << " ms\n";
@@ -66,8 +82,9 @@ private:
     }
 
     rclcpp::Subscription<static_image_msgs::msg::Image4k>::SharedPtr subscription_;
-    std::chrono::steady_clock::time_point previous_steady_time_;
+    rclcpp::Time previous_ros_time_;
     size_t frame_count_;
+    rclcpp::Clock steady_clock_{RCL_STEADY_TIME};
     std::vector<double> latencies_;
     std::vector<double> frame_times_;
 };
